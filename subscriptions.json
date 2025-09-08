@@ -1,0 +1,9 @@
+{
+  "pairs": [
+    "EURUSD",
+    "GBPUSD",
+    "USDJPY"
+  ],
+  "interval": "5min",
+  "chats": []
+}
