@@ -54,7 +54,6 @@ async def check_signals_job(context: ContextTypes.DEFAULT_TYPE):
     pairs = subs.get("pairs", [])
     interval = subs.get("interval", "5min")
     chats = subs.get("chats", [])
-
     if not chats:
         return
 
@@ -147,7 +146,7 @@ def main():
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("test", test))
 
-    # جدولة التشييك الدوري بطريقة متوافقة مع PTB v21
+    # JobQueue (لازم p-t-b[job-queue] تكون مثبتة)
     app.job_queue.run_repeating(
         check_signals_job,
         interval=timedelta(minutes=INTERVAL_MINUTES),
@@ -155,8 +154,26 @@ def main():
         name="fx_rsi_checker",
     )
 
-    logger.info("Bot started")
-    app.run_polling()
+    # ==== Webhook على Render ====
+    port = int(os.environ.get("PORT", "5000"))
+    host = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+    if not host:
+        raise RuntimeError("RENDER_EXTERNAL_HOSTNAME is missing; Render should provide it.")
+
+    # نخلي مسار الويبهوك هو التوكن (حماية بسيطة)
+    url_path = TELEGRAM_BOT_TOKEN
+    webhook_url = f"https://{host}/{url_path}"
+
+    logger.info(f"Starting webhook on port {port}, url={webhook_url}")
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=port,
+        url_path=url_path,
+        webhook_url=webhook_url,
+        # drop أي تحديثات قديمة عالطريق
+        allowed_updates=Update.ALL_TYPES,
+        stop_signals=None,  # يخلي Render يدير الإيقاف
+    )
 
 
 if __name__ == "__main__":
