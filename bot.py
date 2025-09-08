@@ -1,14 +1,13 @@
 import os
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-# ✅ استيراد من ملفات الروت (مو مجلدات)
 from alpha_vantage import fetch_fx
 from rsi import rsi_signals
 
@@ -40,7 +39,7 @@ def save_subs(data):
 
 def is_admin(chat_id: int) -> bool:
     if not ADMIN_CHAT_IDS:
-        return True  # وصول مفتوح إذا ما تحددت IDs
+        return True
     return str(chat_id) in ADMIN_CHAT_IDS
 
 
@@ -138,6 +137,7 @@ async def test(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     if not TELEGRAM_BOT_TOKEN:
         raise RuntimeError("Missing TELEGRAM_BOT_TOKEN")
+
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -147,8 +147,13 @@ def main():
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("test", test))
 
-    # JobQueue لفحص الإشارات بشكل دوري
-    app.job_queue.run_repeating(check_signals_job, interval=INTERVAL_MINUTES * 60, first=10)
+    # جدولة التشييك الدوري بطريقة متوافقة مع PTB v21
+    app.job_queue.run_repeating(
+        check_signals_job,
+        interval=timedelta(minutes=INTERVAL_MINUTES),
+        first=10,
+        name="fx_rsi_checker",
+    )
 
     logger.info("Bot started")
     app.run_polling()
