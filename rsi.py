@@ -1,28 +1,34 @@
 import pandas as pd
-from ta.momentum import RSIIndicator
+
+def rsi_series(close: pd.Series, window: int = 14) -> pd.Series:
+    delta = close.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+
+    # Wilder's RSI using EWMA
+    avg_gain = gain.ewm(alpha=1/window, min_periods=window, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1/window, min_periods=window, adjust=False).mean()
+
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
 
 def rsi_signals(df: pd.DataFrame, low: float = 30, high: float = 70, window: int = 14):
-    """Return last signal string or None based on RSI cross events."""
-    close = df['close']
-    rsi = RSIIndicator(close, window=window).rsi()
-    df = df.copy()
-    df['rsi'] = rsi
-    # Consider last two bars to detect cross
-    if len(df) < 2:
+    if 'close' not in df.columns or len(df) < window + 2:
         return None
+    df = df.copy()
+    df['rsi'] = rsi_series(df['close'], window=window)
 
     prev = df.iloc[-2]
     last = df.iloc[-1]
 
-    # Cross up from below 'low'
-    if prev['rsi'] <= low and last['rsi'] > low:
-        return f"RSI cross-up from {prev['rsi']:.1f} to {last['rsi']:.1f} → Potential BUY"
-    # Cross down from above 'high'
-    if prev['rsi'] >= high and last['rsi'] < high:
-        return f"RSI cross-down from {prev['rsi']:.1f} to {last['rsi']:.1f} → Potential SELL"
-    # Optional: oversold/overbought alerts
-    if last['rsi'] < low:
-        return f"RSI {last['rsi']:.1f} (oversold) → Watch for BUY setup"
-    if last['rsi'] > high:
-        return f"RSI {last['rsi']:.1f} (overbought) → Watch for SELL setup"
+    if pd.notna(prev['rsi']) and pd.notna(last['rsi']):
+        if prev['rsi'] <= low and last['rsi'] > low:
+            return f"RSI cross-up من {prev['rsi']:.1f} إلى {last['rsi']:.1f} → احتمال BUY"
+        if prev['rsi'] >= high and last['rsi'] < high:
+            return f"RSI cross-down من {prev['rsi']:.1f} إلى {last['rsi']:.1f} → احتمال SELL"
+        if last['rsi'] < low:
+            return f"RSI {last['rsi']:.1f} (Oversold) → ترقّب BUY"
+        if last['rsi'] > high:
+            return f"RSI {last['rsi']:.1f} (Overbought) → ترقّب SELL"
     return None
