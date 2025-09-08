@@ -8,8 +8,9 @@ from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-from services.alpha_vantage import fetch_fx
-from strategies.rsi import rsi_signals
+# ✅ استيراد من ملفات الروت (مو مجلدات)
+from alpha_vantage import fetch_fx
+from rsi import rsi_signals
 
 load_dotenv()
 
@@ -24,25 +25,30 @@ RSI_HIGH = float(os.getenv("RSI_HIGH", "70"))
 
 SUBS_FILE = "subscriptions.json"
 
+
 def load_subs():
     if not os.path.exists(SUBS_FILE):
         return {"pairs": ["EURUSD", "GBPUSD", "USDJPY"], "interval": "5min", "chats": []}
     with open(SUBS_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
+
 def save_subs(data):
     with open(SUBS_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
+
 def is_admin(chat_id: int) -> bool:
     if not ADMIN_CHAT_IDS:
-        return True  # open access if not set
+        return True  # وصول مفتوح إذا ما تحددت IDs
     return str(chat_id) in ADMIN_CHAT_IDS
+
 
 async def send_signal(context: ContextTypes.DEFAULT_TYPE, chat_id: int, symbol: str, text: str):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M")
     msg = f"📣 *Signal* | {symbol}\n{ts}\n{text}"
     await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode=ParseMode.MARKDOWN)
+
 
 async def check_signals_job(context: ContextTypes.DEFAULT_TYPE):
     subs = load_subs()
@@ -63,16 +69,18 @@ async def check_signals_job(context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.exception(f"Error on {symbol}: {e}")
 
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "أهلاً! هذا بوت إشارات فوركس بالـ RSI.\n"
-        "أوامر متاحة:\n"
+        "أهلاً! هذا بوت إشارات فوركس يعتمد RSI.\n"
+        "الأوامر:\n"
         "/subscribe — اشترك بالاشعارات\n"
         "/unsubscribe — إلغاء الاشتراك\n"
         "/pairs — عرض/تعديل الأزواج\n"
         "/status — الحالة الحالية\n"
         "/test — إرسال إشارة تجريبية"
     )
+
 
 async def subscribe(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -84,6 +92,7 @@ async def subscribe(update: Update, context: ContextTypes.DEFAULT_TYPE):
         save_subs(subs)
     await update.message.reply_text("تم الاشتراك ✅")
 
+
 async def unsubscribe(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     subs = load_subs()
@@ -91,6 +100,7 @@ async def unsubscribe(update: Update, context: ContextTypes.DEFAULT_TYPE):
         subs["chats"].remove(chat_id)
         save_subs(subs)
     await update.message.reply_text("تم إلغاء الاشتراك ✅")
+
 
 async def pairs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     subs = load_subs()
@@ -104,6 +114,7 @@ async def pairs(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await update.message.reply_text(f"تم التحديث. الأزواج: {', '.join(pairs)}")
     await update.message.reply_text(f"الأزواج الحالية: {', '.join(subs.get('pairs', []))}")
 
+
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     subs = load_subs()
     info = {
@@ -116,11 +127,13 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }
     await update.message.reply_text(f"الحالة: {info}")
 
+
 async def test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     subs = load_subs()
     for chat_id in subs.get("chats", []):
         await send_signal(context, chat_id, "EURUSD", "اختبار إشارة ✅")
     await update.message.reply_text("تم إرسال اختبار.")
+
 
 def main():
     if not TELEGRAM_BOT_TOKEN:
@@ -134,11 +147,12 @@ def main():
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("test", test))
 
-    # JobQueue for periodic checks
+    # JobQueue لفحص الإشارات بشكل دوري
     app.job_queue.run_repeating(check_signals_job, interval=INTERVAL_MINUTES * 60, first=10)
 
     logger.info("Bot started")
     app.run_polling()
+
 
 if __name__ == "__main__":
     main()
